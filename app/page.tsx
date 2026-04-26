@@ -1,11 +1,32 @@
 "use client";
-import Summarizer from '@/components/Summarizer';
 import Link from 'next/link';
 import React, { useState, useEffect } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { Search, GraduationCap, Calendar, CheckCircle, ExternalLink, Loader2, Plus } from 'lucide-react';
+import { Search, GraduationCap, Calendar, CheckCircle, ExternalLink, Loader2, Plus, Share2 } from 'lucide-react';
 
+const handleShare = (title: string, link: string, desc: string) => {
+  const subject = encodeURIComponent(`Student Opportunity: ${title}`);
+  const body = encodeURIComponent(
+`Dear SPOC,
+
+I would like to bring the following opportunity to your attention:
+
+Opportunity: ${title}
+Official Link: ${link}
+
+About:
+${desc}
+
+Kindly approve or forward this for institutional participation.
+
+Thank you.`
+  );
+  window.open(
+    `https://mail.google.com/mail/?view=cm&fs=1&su=${subject}&body=${body}`,
+    '_blank'
+  );
+};
 export default function Home() {
   const [filter, setFilter] = useState('All');
   const [opportunities, setOpportunities] = useState<any[]>([]);
@@ -30,7 +51,6 @@ export default function Home() {
     fetchData();
   }, []);
 
-  // Filter logic for both Category and Search Text
   const filteredData = opportunities.filter(opt => {
     const matchesFilter = filter === 'All' || opt.type === filter;
     const matchesSearch = opt.title.toLowerCase().includes(searchTerm.toLowerCase());
@@ -42,14 +62,11 @@ export default function Home() {
       {/* Navbar */}
       <nav className="bg-white border-b p-4 sticky top-0 z-50">
         <div className="flex gap-3">
-         {/* AI Assistant Button */}
-           <Link href="/ai-assistant">
-             <button className="px-4 py-2 text-sm font-semibold text-blue-600 border border-blue-200 rounded-xl hover:bg-blue-50 transition">
-               Ask AI
-             </button>
-           </Link>
-  
-           {/* Login Button */}
+          <Link href="/ai-assistant">
+            <button className="px-4 py-2 text-sm font-semibold text-blue-600 border border-blue-200 rounded-xl hover:bg-blue-50 transition">
+              Ask AI
+            </button>
+          </Link>
           <button className="px-4 py-2 text-sm font-semibold bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition shadow-md shadow-blue-100">
             Login
           </button>
@@ -63,12 +80,11 @@ export default function Home() {
             Opportunities for <span className="text-blue-600">Future Engineers</span>
           </h2>
           <p className="text-slate-500 mb-8 max-w-lg mx-auto">Explore verified scholarships, internships, and hackathons curated just for you.</p>
-          
           <div className="max-w-2xl mx-auto relative group">
             <Search className="absolute left-4 top-3.5 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={20} />
-            <input 
-              type="text" 
-              placeholder="Search by title..." 
+            <input
+              type="text"
+              placeholder="Search by title..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-12 pr-4 py-4 rounded-2xl border-none shadow-lg shadow-slate-200/50 focus:ring-2 focus:ring-blue-500 outline-none text-slate-700 transition-all"
@@ -83,8 +99,8 @@ export default function Home() {
               key={tag}
               onClick={() => setFilter(tag)}
               className={`px-6 py-2.5 rounded-full text-sm font-bold transition-all ${
-                filter === tag 
-                ? 'bg-slate-900 text-white shadow-xl scale-105' 
+                filter === tag
+                ? 'bg-slate-900 text-white shadow-xl scale-105'
                 : 'bg-white text-slate-600 border border-slate-200 hover:border-blue-300'
               }`}
             >
@@ -118,9 +134,19 @@ export default function Home() {
                     <div className="flex items-center gap-2 text-slate-400 font-medium">
                       <Calendar size={16} /> <span>{opt.date}</span>
                     </div>
-                    <button className="flex items-center gap-1.5 text-blue-600 font-extrabold group-hover:gap-3 transition-all">
-                      Details <ExternalLink size={16} />
-                    </button>
+                    <div className="flex items-center gap-3">
+                      {/* Share with SPOC Button */}
+                      <button
+                        onClick={() => handleShare(opt.title, opt.link || '#', opt.desc)}
+                        className="flex items-center gap-1.5 text-xs font-semibold text-green-700 bg-green-50 border border-green-200 px-3 py-1.5 rounded-lg hover:bg-green-100 transition"
+                      >
+                        <Share2 size={13} />
+                        Share with SPOC
+                      </button>
+                      <button className="flex items-center gap-1.5 text-blue-600 font-extrabold group-hover:gap-3 transition-all">
+                        Details <ExternalLink size={16} />
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))
@@ -133,7 +159,6 @@ export default function Home() {
         )}
       </div>
 
-      {/* Floating Action Button (Optional - for adding more later) */}
       <button className="fixed bottom-8 right-8 bg-blue-600 text-white p-4 rounded-full shadow-2xl hover:scale-110 transition-transform active:scale-95">
         <Plus size={24} />
       </button>
