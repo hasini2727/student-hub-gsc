@@ -4,6 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Search, GraduationCap, Calendar, CheckCircle, ExternalLink, Loader2, Plus, Share2 } from 'lucide-react';
+import AuthButton from '@/components/AuthButton';
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const getDeadlineStatus = (dateStr: string) => {
   if (!dateStr) return null;
@@ -54,6 +56,10 @@ export default function Home() {
   const [opportunities, setOpportunities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [aiFilteredIds, setAiFilteredIds] = useState<string[] | null>(null);
+  const [studentYear, setStudentYear] = useState('');
+  const [studentBranch, setStudentBranch] = useState('');
+  const [aiFiltering, setAiFiltering] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -72,12 +78,58 @@ export default function Home() {
     };
     fetchData();
   }, []);
+  const handleProfileUpdate = async (year: string, branch: string) => {
+  setStudentYear(year);
+  setStudentBranch(branch);
+  setAiFilteredIds(null);
 
-  const filteredData = opportunities.filter(opt => {
+  if (!year || !branch) return;
+
+  setAiFiltering(true);
+  try {
+    const genAI = new GoogleGenerativeAI(process.env.NEXT_PUBLIC_GEMINI_API_KEY || "");
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+    const prompt = `You are a student opportunity filter.
+    Student profile: Year ${year}, Branch: ${branch}.
+    Here are the opportunities:
+    ${opportunities.map(o => `ID: ${o.id} | Title: ${o.title} | Desc: ${o.desc}`).join('\n')}
+
+    Return ONLY a JSON array of IDs that are relevant to this student.
+    Example: ["id1", "id2"]
+    No explanation, just the JSON array.`;
+
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
+    const clean = text.replace(/```json|```/g, "").trim();
+    const ids = JSON.parse(clean);
+    setAiFilteredIds(ids);
+  } catch (err) {
+    console.error("AI filter error:", err);
+  } finally {
+    setAiFiltering(false);
+  }
+};
+
+ const filteredData = opportunities.filter(opt => {
     const matchesFilter = filter === 'All' || opt.type === filter;
     const matchesSearch = opt.title.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesFilter && matchesSearch;
+    const matchesAI = aiFilteredIds === null || aiFilteredIds.includes(opt.id);
+    return matchesFilter && matchesSearch && matchesAI;
   });
+  {aiFiltering && (
+    <div className="text-center text-blue-600 text-sm font-semibold animate-pulse mb-6">
+      ✨ AI is filtering opportunities for you...
+    </div>
+  )}
+  {aiFilteredIds !== null && (
+    <div className="text-center text-slate-500 text-sm mb-6">
+      Showing <span className="font-bold text-blue-600">{filteredData.length}</span> opportunities matched for Year {studentYear} · {studentBranch}
+      <button onClick={() => setAiFilteredIds(null)} className="ml-3 text-red-400 hover:text-red-600 font-semibold">
+        Clear filter
+      </button>
+    </div>
+  )}
 
   return (
     <main className="min-h-screen bg-slate-50 font-sans">
@@ -89,9 +141,7 @@ export default function Home() {
               Ask AI
             </button>
           </Link>
-          <button className="px-4 py-2 text-sm font-semibold bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition shadow-md shadow-blue-100">
-            Login
-          </button>
+          <AuthButton onProfileUpdate={handleProfileUpdate} />
         </div>
       </nav>
 
