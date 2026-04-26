@@ -27,7 +27,7 @@ export default function AIChatPage() {
       
       const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
       const expertPrompt = `You are an expert academic assistant for StudentHub. 
-        Analyze the following opportunity details and provide a clear, concise summary. 
+        Analyze the following opportunity details, eligibility, dead line and provide a clear, concise summary. 
         Details/Question: ${userMsg}`;
 
       // 3. Use the most modern, robust call structure

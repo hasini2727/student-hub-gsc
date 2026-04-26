@@ -5,6 +5,28 @@ import { collection, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Search, GraduationCap, Calendar, CheckCircle, ExternalLink, Loader2, Plus, Share2 } from 'lucide-react';
 
+const getDeadlineStatus = (dateStr: string) => {
+  if (!dateStr) return null;
+
+  // Handle vague dates — just show a neutral "Upcoming" badge
+  if (dateStr.toLowerCase().includes('tentative') || 
+      dateStr.toLowerCase().includes('mid') ||
+      dateStr.match(/^[A-Za-z]+ \d{4}$/)) {
+    return 'upcoming';
+  }
+
+  // Try to parse exact dates like "May 10, 2026" or "April 28, 2026"
+  const parsed = new Date(dateStr);
+  if (isNaN(parsed.getTime())) return null;
+
+  const today = new Date();
+  const diffDays = Math.ceil((parsed.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) return 'expired';
+  if (diffDays <= 7) return 'closing';
+  return null;
+};
+
 const handleShare = (title: string, link: string, desc: string) => {
   const subject = encodeURIComponent(`Student Opportunity: ${title}`);
   const body = encodeURIComponent(
@@ -124,9 +146,26 @@ export default function Home() {
                     <div className="bg-blue-50 p-3 rounded-2xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-all duration-300">
                       <GraduationCap size={24} />
                     </div>
-                    <span className="flex items-center gap-1 text-[10px] font-black tracking-widest text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full uppercase">
-                      <CheckCircle size={12} /> Verified
-                    </span>
+                    <div className="flex flex-col items-end gap-1">
+                      <span className="flex items-center gap-1 text-[10px] font-black tracking-widest text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full uppercase">
+                        <CheckCircle size={12} /> Verified
+                      </span>
+                      {getDeadlineStatus(opt.date) === 'closing' && (
+                        <span className="text-[10px] font-black tracking-widest text-red-600 bg-red-50 px-3 py-1 rounded-full uppercase animate-pulse">
+                          🔴 Closing Soon
+                        </span>
+                      )}
+                      {getDeadlineStatus(opt.date) === 'upcoming' && (
+                        <span className="text-[10px] font-black tracking-widest text-amber-600 bg-amber-50 px-3 py-1 rounded-full uppercase">
+                          📅 Tentative
+                        </span>
+                      )}
+                      {getDeadlineStatus(opt.date) === 'expired' && (
+                        <span className="text-[10px] font-black tracking-widest text-slate-400 bg-slate-100 px-3 py-1 rounded-full uppercase">
+                          Closed
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <h3 className="text-xl font-bold text-slate-800 mb-3 group-hover:text-blue-600 transition-colors">{opt.title}</h3>
                   <p className="text-slate-500 text-sm mb-8 leading-relaxed line-clamp-3">{opt.desc}</p>
