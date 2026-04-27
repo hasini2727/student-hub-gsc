@@ -8,7 +8,7 @@ import {
   onAuthStateChanged,
   User,
 } from "firebase/auth";
-import { LogOut, ChevronDown } from "lucide-react";
+import { LogOut } from "lucide-react";
 
 interface AuthButtonProps {
   onProfileUpdate: (year: string, branch: string) => void;
@@ -24,7 +24,6 @@ export default function AuthButton({ onProfileUpdate }: AuthButtonProps) {
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
       setUser(u);
-      // Load saved profile from localStorage
       if (u) {
         const savedYear = localStorage.getItem(`year_${u.uid}`) || "";
         const savedBranch = localStorage.getItem(`branch_${u.uid}`) || "";
@@ -36,7 +35,6 @@ export default function AuthButton({ onProfileUpdate }: AuthButtonProps) {
     return () => unsub();
   }, []);
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
@@ -69,6 +67,18 @@ export default function AuthButton({ onProfileUpdate }: AuthButtonProps) {
     }
   };
 
+  // Avatar: photo or first letter
+  const Avatar = () => {
+    const letter = user?.displayName?.[0]?.toUpperCase() || "?";
+    return user?.photoURL ? (
+      <img src={user.photoURL} alt="avatar" className="w-9 h-9 rounded-full object-cover" />
+    ) : (
+      <div className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-sm">
+        {letter}
+      </div>
+    );
+  };
+
   if (!user) {
     return (
       <button
@@ -82,24 +92,28 @@ export default function AuthButton({ onProfileUpdate }: AuthButtonProps) {
 
   return (
     <div className="relative" ref={dropdownRef}>
+      {/* Profile Button */}
       <button
         onClick={() => setDropdownOpen(!dropdownOpen)}
-        className="flex items-center gap-2 px-3 py-2 bg-slate-100 rounded-xl hover:bg-slate-200 transition"
+        className="flex flex-col items-center gap-0.5 hover:opacity-80 transition"
       >
-        <img
-          src={user.photoURL || ""}
-          alt="profile"
-          className="w-6 h-6 rounded-full"
-        />
-        <span className="text-sm font-semibold text-slate-700 max-w-[100px] truncate">
-          {user.displayName?.split(" ")[0]}
-        </span>
-        <ChevronDown size={14} className="text-slate-500" />
+        <Avatar />
+        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Profile</span>
       </button>
 
+      {/* Dropdown — fixed to right edge */}
       {dropdownOpen && (
-        <div className="absolute right-0 mt-2 w-64 bg-white border border-slate-200 rounded-2xl shadow-xl p-4 z-50">
-          <p className="text-xs font-bold text-slate-400 uppercase mb-3">My Profile</p>
+        <div className="absolute right-0 mt-2 w-64 bg-white border border-slate-200 rounded-2xl shadow-2xl p-4 z-50">
+          {/* User info */}
+          <div className="flex items-center gap-3 mb-4 pb-3 border-b border-slate-100">
+            <Avatar />
+            <div className="overflow-hidden">
+              <p className="text-sm font-bold text-slate-800 truncate">{user.displayName}</p>
+              <p className="text-xs text-slate-400 truncate">{user.email}</p>
+            </div>
+          </div>
+
+          <p className="text-xs font-bold text-slate-400 uppercase mb-3">Filter Opportunities</p>
 
           <div className="mb-3">
             <label className="text-xs font-semibold text-slate-600 mb-1 block">Year</label>

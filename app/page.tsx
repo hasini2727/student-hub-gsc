@@ -3,27 +3,21 @@ import Link from 'next/link';
 import React, { useState, useEffect } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { Search, GraduationCap, Calendar, CheckCircle, ExternalLink, Loader2, Plus, Share2 } from 'lucide-react';
+import { Search, GraduationCap, Calendar, CheckCircle, ExternalLink, Loader2, Plus, Share2, Sparkles } from 'lucide-react';
 import AuthButton from '@/components/AuthButton';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const getDeadlineStatus = (dateStr: string) => {
   if (!dateStr) return null;
-
-  // Handle vague dates — just show a neutral "Upcoming" badge
-  if (dateStr.toLowerCase().includes('tentative') || 
+  if (dateStr.toLowerCase().includes('tentative') ||
       dateStr.toLowerCase().includes('mid') ||
       dateStr.match(/^[A-Za-z]+ \d{4}$/)) {
     return 'upcoming';
   }
-
-  // Try to parse exact dates like "May 10, 2026" or "April 28, 2026"
   const parsed = new Date(dateStr);
   if (isNaN(parsed.getTime())) return null;
-
   const today = new Date();
   const diffDays = Math.ceil((parsed.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-
   if (diffDays < 0) return 'expired';
   if (diffDays <= 7) return 'closing';
   return null;
@@ -51,6 +45,7 @@ Thank you.`
     '_blank'
   );
 };
+
 export default function Home() {
   const [filter, setFilter] = useState('All');
   const [opportunities, setOpportunities] = useState<any[]>([]);
@@ -78,64 +73,72 @@ export default function Home() {
     };
     fetchData();
   }, []);
-  const handleProfileUpdate = async (year: string, branch: string) => {
-  setStudentYear(year);
-  setStudentBranch(branch);
-  setAiFilteredIds(null);
 
-  if (!year || !branch) return;
+  const handleProfileUpdate = async (year: string, branch: string, allOpportunities?: any[]) => {
+    setStudentYear(year);
+    setStudentBranch(branch);
+    setAiFilteredIds(null);
+    if (!year || !branch) return;
 
-  setAiFiltering(true);
-  try {
-    const genAI = new GoogleGenerativeAI(process.env.NEXT_PUBLIC_GEMINI_API_KEY || "");
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const opps = allOpportunities || opportunities;
+    if (opps.length === 0) return;
 
-    const prompt = `You are a student opportunity filter.
-    Student profile: Year ${year}, Branch: ${branch}.
-    Here are the opportunities:
-    ${opportunities.map(o => `ID: ${o.id} | Title: ${o.title} | Desc: ${o.desc}`).join('\n')}
+    setAiFiltering(true);
+    try {
+      const genAI = new GoogleGenerativeAI(process.env.NEXT_PUBLIC_GEMINI_API_KEY || "");
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-    Return ONLY a JSON array of IDs that are relevant to this student.
-    Example: ["id1", "id2"]
-    No explanation, just the JSON array.`;
+      const prompt = `You are a student opportunity filter. Be inclusive — when in doubt, include the opportunity.
+Student profile: Year ${year}, Branch: ${branch}.
+Here are the opportunities:
+${opps.map(o => `ID: ${o.id} | Title: ${o.title} | Desc: ${o.desc}`).join('\n')}
 
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
-    const clean = text.replace(/```json|```/g, "").trim();
-    const ids = JSON.parse(clean);
-    setAiFilteredIds(ids);
-  } catch (err) {
-    console.error("AI filter error:", err);
-  } finally {
-    setAiFiltering(false);
-  }
-};
+Rules:
+- Include ALL general opportunities (scholarships, hackathons open to all branches)
+- Only exclude if the opportunity EXPLICITLY restricts to other branches
+- Return ONLY a JSON array of IDs. No explanation, no markdown, just the array.
+Example: ["id1", "id2", "id3"]`;
 
- const filteredData = opportunities.filter(opt => {
+      const result = await model.generateContent(prompt);
+      const text = result.response.text().trim();
+      const match = text.match(/\[[\s\S]*\]/);
+      if (match) {
+        const ids = JSON.parse(match[0]);
+        setAiFilteredIds(ids);
+      } else {
+        setAiFilteredIds(null);
+      }
+    } catch (err) {
+      console.error("AI filter error:", err);
+      setAiFilteredIds(null);
+    } finally {
+      setAiFiltering(false);
+    }
+  };
+
+  const filteredData = opportunities.filter(opt => {
     const matchesFilter = filter === 'All' || opt.type === filter;
     const matchesSearch = opt.title.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesAI = aiFilteredIds === null || aiFilteredIds.includes(opt.id);
     return matchesFilter && matchesSearch && matchesAI;
   });
-  {aiFiltering && (
-    <div className="text-center text-blue-600 text-sm font-semibold animate-pulse mb-6">
-      ✨ AI is filtering opportunities for you...
-    </div>
-  )}
-  {aiFilteredIds !== null && (
-    <div className="text-center text-slate-500 text-sm mb-6">
-      Showing <span className="font-bold text-blue-600">{filteredData.length}</span> opportunities matched for Year {studentYear} · {studentBranch}
-      <button onClick={() => setAiFilteredIds(null)} className="ml-3 text-red-400 hover:text-red-600 font-semibold">
-        Clear filter
-      </button>
-    </div>
-  )}
 
   return (
     <main className="min-h-screen bg-slate-50 font-sans">
       {/* Navbar */}
-      <nav className="bg-white border-b p-4 sticky top-0 z-50">
-        <div className="flex gap-3">
+      <nav className="bg-white border-b p-4 sticky top-0 z-50 flex items-center justify-between">
+       <div className="flex items-center gap-2">
+         <div className="bg-blue-600 p-1.5 rounded-lg shadow-md shadow-blue-200">
+         {/* Swapped Sparkles for GraduationCap */}
+         <GraduationCap className="text-white" size={18} />
+        </div>
+        <h1 className="text-xl font-black tracking-tight text-slate-900">
+          Student<span className="text-blue-600">Hub</span>
+           </h1>
+          </div>
+
+        {/* Right: Ask AI + Profile */}
+        <div className="flex items-center gap-3">
           <Link href="/ai-assistant">
             <button className="px-4 py-2 text-sm font-semibold text-blue-600 border border-blue-200 rounded-xl hover:bg-blue-50 transition">
               Ask AI
@@ -146,12 +149,14 @@ export default function Home() {
       </nav>
 
       <div className="max-w-6xl mx-auto px-4 pt-12">
-        {/* Hero / Search Section */}
+        {/* Hero */}
         <div className="mb-12 text-center">
           <h2 className="text-4xl font-extrabold text-slate-900 mb-4 tracking-tight">
             Opportunities for <span className="text-blue-600">Future Engineers</span>
           </h2>
-          <p className="text-slate-500 mb-8 max-w-lg mx-auto">Explore verified scholarships, internships, and hackathons curated just for you.</p>
+          <p className="text-slate-500 mb-8 max-w-lg mx-auto">
+            Explore verified scholarships, internships, and hackathons curated just for you.
+          </p>
           <div className="max-w-2xl mx-auto relative group">
             <Search className="absolute left-4 top-3.5 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={20} />
             <input
@@ -165,21 +170,43 @@ export default function Home() {
         </div>
 
         {/* Filter Chips */}
-        <div className="flex flex-wrap justify-center gap-3 mb-12">
+        <div className="flex flex-wrap justify-center gap-3 mb-8">
           {['All', 'Scholarship', 'Internship', 'Hackathon'].map((tag) => (
             <button
               key={tag}
               onClick={() => setFilter(tag)}
               className={`px-6 py-2.5 rounded-full text-sm font-bold transition-all ${
                 filter === tag
-                ? 'bg-slate-900 text-white shadow-xl scale-105'
-                : 'bg-white text-slate-600 border border-slate-200 hover:border-blue-300'
+                  ? 'bg-slate-900 text-white shadow-xl scale-105'
+                  : 'bg-white text-slate-600 border border-slate-200 hover:border-blue-300'
               }`}
             >
               {tag}
             </button>
           ))}
         </div>
+
+        {/* AI Filter Banner */}
+        {aiFiltering && (
+          <div className="flex items-center justify-center gap-2 text-blue-600 text-sm font-semibold animate-pulse mb-6 bg-blue-50 py-3 rounded-2xl">
+            <Loader2 size={16} className="animate-spin" />
+            ✨ AI is personalizing opportunities for you...
+          </div>
+        )}
+        {!aiFiltering && aiFilteredIds !== null && (
+          <div className="flex items-center justify-center gap-3 mb-6 bg-blue-50 border border-blue-100 py-3 px-6 rounded-2xl">
+            <span className="text-sm text-slate-600">
+              ✨ Showing <span className="font-black text-blue-600 text-base">{filteredData.length}</span> opportunities matched for
+              <span className="font-bold text-slate-800"> Year {studentYear} · {studentBranch}</span>
+            </span>
+            <button
+              onClick={() => setAiFilteredIds(null)}
+              className="text-xs font-bold text-red-400 hover:text-red-600 border border-red-200 px-3 py-1 rounded-lg hover:bg-red-50 transition"
+            >
+              Clear filter
+            </button>
+          </div>
+        )}
 
         {/* Results Grid */}
         {loading ? (
@@ -224,7 +251,6 @@ export default function Home() {
                       <Calendar size={16} /> <span>{opt.date}</span>
                     </div>
                     <div className="flex items-center gap-3">
-                      {/* Share with SPOC Button */}
                       <button
                         onClick={() => handleShare(opt.title, opt.link || '#', opt.desc)}
                         className="flex items-center gap-1.5 text-xs font-semibold text-green-700 bg-green-50 border border-green-200 px-3 py-1.5 rounded-lg hover:bg-green-100 transition"
@@ -248,9 +274,6 @@ export default function Home() {
         )}
       </div>
 
-      <button className="fixed bottom-8 right-8 bg-blue-600 text-white p-4 rounded-full shadow-2xl hover:scale-110 transition-transform active:scale-95">
-        <Plus size={24} />
-      </button>
     </main>
   );
 }
