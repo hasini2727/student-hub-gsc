@@ -1,17 +1,33 @@
 "use client";
+
 import Link from 'next/link';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { Search, GraduationCap, Calendar, CheckCircle, ExternalLink, Loader2, Plus, Share2, Sparkles } from 'lucide-react';
+import {
+  Search,
+  GraduationCap,
+  Calendar,
+  CheckCircle,
+  ExternalLink,
+  Loader2,
+  Share2,
+} from 'lucide-react';
 import AuthButton from '@/components/AuthButton';
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
+// Initialize Gemini AI (use your API key from env)
+const genAI = new GoogleGenerativeAI(process.env.NEXT_PUBLIC_GEMINI_API_KEY || '');
+const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+
+// Helper functions (unchanged, but kept as they work)
 const getDeadlineStatus = (dateStr: string) => {
   if (!dateStr) return null;
-  if (dateStr.toLowerCase().includes('tentative') ||
-      dateStr.toLowerCase().includes('mid') ||
-      dateStr.match(/^[A-Za-z]+ \d{4}$/)) {
+  if (
+    dateStr.toLowerCase().includes('tentative') ||
+    dateStr.toLowerCase().includes('mid') ||
+    dateStr.match(/^[A-Za-z]+ \d{4}$/)
+  ) {
     return 'upcoming';
   }
   const parsed = new Date(dateStr);
@@ -26,7 +42,7 @@ const getDeadlineStatus = (dateStr: string) => {
 const handleShare = (title: string, link: string, desc: string) => {
   const subject = encodeURIComponent(`Student Opportunity: ${title}`);
   const body = encodeURIComponent(
-`Dear SPOC,
+    `Dear SPOC,
 
 I would like to bring the following opportunity to your attention:
 
@@ -56,17 +72,18 @@ export default function Home() {
   const [studentBranch, setStudentBranch] = useState('');
   const [aiFiltering, setAiFiltering] = useState(false);
 
+  // Fetch all opportunities from Firestore
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const querySnapshot = await getDocs(collection(db, "opportunities"));
-        const data = querySnapshot.docs.map(doc => ({
+        const querySnapshot = await getDocs(collection(db, 'opportunities'));
+        const data = querySnapshot.docs.map((doc) => ({
           id: doc.id,
-          ...doc.data()
+          ...doc.data(),
         }));
         setOpportunities(data);
       } catch (error) {
-        console.error("Error fetching data: ", error);
+        console.error('Error fetching data: ', error);
       } finally {
         setLoading(false);
       }
@@ -74,24 +91,26 @@ export default function Home() {
     fetchData();
   }, []);
 
-  const handleProfileUpdate = async (year: string, branch: string, allOpportunities?: any[]) => {
-    setStudentYear(year);
-    setStudentBranch(branch);
-    setAiFilteredIds(null);
-    if (!year || !branch) return;
+  // AI‑based filtering using Gemini
+  const handleProfileUpdate = useCallback(
+    async (year: string, branch: string) => {
+      setStudentYear(year);
+      setStudentBranch(branch);
 
-    const opps = allOpportunities || opportunities;
-    if (opps.length === 0) return;
+      // If no profile data, clear AI filter and show everything
+      if (!year || !branch) {
+        setAiFilteredIds(null);
+        return;
+      }
 
-    setAiFiltering(true);
-    try {
-      const genAI = new GoogleGenerativeAI(process.env.NEXT_PUBLIC_GEMINI_API_KEY || "");
-      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+      setAiFiltering(true);
+      try {
+        const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' }); // or 'gemini-2.5-flash' if available
 
-      const prompt = `You are a student opportunity filter. Be inclusive — when in doubt, include the opportunity.
+        const prompt = `You are a student opportunity filter. Be inclusive — when in doubt, include the opportunity.
 Student profile: Year ${year}, Branch: ${branch}.
 Here are the opportunities:
-${opps.map(o => `ID: ${o.id} | Title: ${o.title} | Desc: ${o.desc}`).join('\n')}
+${opportunities.map((o) => `ID: ${o.id} | Title: ${o.title} | Desc: ${o.desc}`).join('\n')}
 
 Rules:
 - Include ALL general opportunities (scholarships, hackathons open to all branches)
@@ -99,24 +118,33 @@ Rules:
 - Return ONLY a JSON array of IDs. No explanation, no markdown, just the array.
 Example: ["id1", "id2", "id3"]`;
 
-      const result = await model.generateContent(prompt);
-      const text = result.response.text().trim();
-      const match = text.match(/\[[\s\S]*\]/);
-      if (match) {
-        const ids = JSON.parse(match[0]);
-        setAiFilteredIds(ids);
-      } else {
-        setAiFilteredIds(null);
-      }
-    } catch (err) {
-      console.error("AI filter error:", err);
-      setAiFilteredIds(null);
-    } finally {
-      setAiFiltering(false);
-    }
-  };
+        const result = await model.generateContent(prompt);
+        const text = result.response.text().trim();
+        const match = text.match(/\[[\s\S]*\]/);
 
-  const filteredData = opportunities.filter(opt => {
+        if (match) {
+          const filteredIds = JSON.parse(match[0]);
+          setAiFilteredIds(filteredIds);
+        } else {
+          // Fallback: show all if AI response is malformed
+          setAiFilteredIds(null);
+        }
+      } catch (error: any) {
+        console.error('Gemini error:', error);
+        // On error (quota, network, etc.), show all opportunities
+        setAiFilteredIds(null);
+        if (error.status === 429) {
+          console.warn('Rate limit reached. Showing unfiltered results.');
+        }
+      } finally {
+        setAiFiltering(false);
+      }
+    },
+    [opportunities] // re‑create when opportunities change
+  );
+
+  // Compute final filtered list based on type filter, search term, and AI filter
+  const filteredData = opportunities.filter((opt) => {
     const matchesFilter = filter === 'All' || opt.type === filter;
     const matchesSearch = opt.title.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesAI = aiFilteredIds === null || aiFilteredIds.includes(opt.id);
@@ -127,17 +155,15 @@ Example: ["id1", "id2", "id3"]`;
     <main className="min-h-screen bg-slate-50 font-sans">
       {/* Navbar */}
       <nav className="bg-white border-b p-4 sticky top-0 z-50 flex items-center justify-between">
-       <div className="flex items-center gap-2">
-         <div className="bg-blue-600 p-1.5 rounded-lg shadow-md shadow-blue-200">
-         {/* Swapped Sparkles for GraduationCap */}
-         <GraduationCap className="text-white" size={18} />
-        </div>
-        <h1 className="text-xl font-black tracking-tight text-slate-900">
-          Student<span className="text-blue-600">Hub</span>
-           </h1>
+        <div className="flex items-center gap-2">
+          <div className="bg-blue-600 p-1.5 rounded-lg shadow-md shadow-blue-200">
+            <GraduationCap className="text-white" size={18} />
           </div>
+          <h1 className="text-xl font-black tracking-tight text-slate-900">
+            Student<span className="text-blue-600">Hub</span>
+          </h1>
+        </div>
 
-        {/* Right: Ask AI + Profile */}
         <div className="flex items-center gap-3">
           <Link href="/ai-assistant">
             <button className="px-4 py-2 text-sm font-semibold text-blue-600 border border-blue-200 rounded-xl hover:bg-blue-50 transition">
@@ -158,7 +184,10 @@ Example: ["id1", "id2", "id3"]`;
             Explore verified scholarships, internships, and hackathons curated just for you.
           </p>
           <div className="max-w-2xl mx-auto relative group">
-            <Search className="absolute left-4 top-3.5 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={20} />
+            <Search
+              className="absolute left-4 top-3.5 text-slate-400 group-focus-within:text-blue-500 transition-colors"
+              size={20}
+            />
             <input
               type="text"
               placeholder="Search by title..."
@@ -186,7 +215,7 @@ Example: ["id1", "id2", "id3"]`;
           ))}
         </div>
 
-        {/* AI Filter Banner */}
+        {/* AI Filter status bar */}
         {aiFiltering && (
           <div className="flex items-center justify-center gap-2 text-blue-600 text-sm font-semibold animate-pulse mb-6 bg-blue-50 py-3 rounded-2xl">
             <Loader2 size={16} className="animate-spin" />
@@ -196,8 +225,13 @@ Example: ["id1", "id2", "id3"]`;
         {!aiFiltering && aiFilteredIds !== null && (
           <div className="flex items-center justify-center gap-3 mb-6 bg-blue-50 border border-blue-100 py-3 px-6 rounded-2xl">
             <span className="text-sm text-slate-600">
-              ✨ Showing <span className="font-black text-blue-600 text-base">{filteredData.length}</span> opportunities matched for
-              <span className="font-bold text-slate-800"> Year {studentYear} · {studentBranch}</span>
+              ✨ Showing{' '}
+              <span className="font-black text-blue-600 text-base">{filteredData.length}</span>{' '}
+              opportunities matched for
+              <span className="font-bold text-slate-800">
+                {' '}
+                Year {studentYear} · {studentBranch}
+              </span>
             </span>
             <button
               onClick={() => setAiFilteredIds(null)}
@@ -218,15 +252,20 @@ Example: ["id1", "id2", "id3"]`;
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-20">
             {filteredData.length > 0 ? (
               filteredData.map((opt) => (
-                <div key={opt.id} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 group">
+                <div
+                  key={opt.id}
+                  className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 group"
+                >
                   <div className="flex justify-between items-start mb-6">
                     <div className="bg-blue-50 p-3 rounded-2xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-all duration-300">
                       <GraduationCap size={24} />
                     </div>
                     <div className="flex flex-col items-end gap-1">
-                      <span className="flex items-center gap-1 text-[10px] font-black tracking-widest text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full uppercase">
-                        <CheckCircle size={12} /> Verified
-                      </span>
+                      {opt.isVerified && (
+                        <span className="flex items-center gap-1 text-[10px] font-black tracking-widest text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full uppercase">
+                          <CheckCircle size={12} /> Verified
+                        </span>
+                      )}
                       {getDeadlineStatus(opt.date) === 'closing' && (
                         <span className="text-[10px] font-black tracking-widest text-red-600 bg-red-50 px-3 py-1 rounded-full uppercase animate-pulse">
                           🔴 Closing Soon
@@ -244,8 +283,12 @@ Example: ["id1", "id2", "id3"]`;
                       )}
                     </div>
                   </div>
-                  <h3 className="text-xl font-bold text-slate-800 mb-3 group-hover:text-blue-600 transition-colors">{opt.title}</h3>
-                  <p className="text-slate-500 text-sm mb-8 leading-relaxed line-clamp-3">{opt.desc}</p>
+                  <h3 className="text-xl font-bold text-slate-800 mb-3 group-hover:text-blue-600 transition-colors">
+                    {opt.title}
+                  </h3>
+                  <p className="text-slate-500 text-sm mb-8 leading-relaxed line-clamp-3">
+                    {opt.desc}
+                  </p>
                   <div className="pt-5 border-t border-slate-50 flex justify-between items-center text-sm">
                     <div className="flex items-center gap-2 text-slate-400 font-medium">
                       <Calendar size={16} /> <span>{opt.date}</span>
@@ -258,9 +301,14 @@ Example: ["id1", "id2", "id3"]`;
                         <Share2 size={13} />
                         Share with SPOC
                       </button>
-                      <button className="flex items-center gap-1.5 text-blue-600 font-extrabold group-hover:gap-3 transition-all">
+                      <a
+                        href={opt.link || '#'}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1.5 text-blue-600 font-extrabold group-hover:gap-3 transition-all"
+                      >
                         Details <ExternalLink size={16} />
-                      </button>
+                      </a>
                     </div>
                   </div>
                 </div>
@@ -273,7 +321,6 @@ Example: ["id1", "id2", "id3"]`;
           </div>
         )}
       </div>
-
     </main>
   );
 }

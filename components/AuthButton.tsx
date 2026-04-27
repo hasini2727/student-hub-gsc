@@ -1,4 +1,5 @@
-"use client";
+"use client"; // <-- This MUST be the very first line!
+
 import { useState, useEffect, useRef } from "react";
 import { auth } from "@/lib/firebase";
 import {
@@ -14,6 +15,22 @@ interface AuthButtonProps {
   onProfileUpdate: (year: string, branch: string) => void;
 }
 
+// Avatar component extracted outside to avoid being re‑created on each render
+const Avatar = ({ user }: { user: User | null }) => {
+  const letter = user?.displayName?.[0]?.toUpperCase() || "?";
+  return user?.photoURL ? (
+    <img
+      src={user.photoURL}
+      alt={`${user.displayName}'s avatar`}
+      className="w-9 h-9 rounded-full object-cover"
+    />
+  ) : (
+    <div className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-sm">
+      {letter}
+    </div>
+  );
+};
+
 export default function AuthButton({ onProfileUpdate }: AuthButtonProps) {
   const [user, setUser] = useState<User | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -21,28 +38,41 @@ export default function AuthButton({ onProfileUpdate }: AuthButtonProps) {
   const [branch, setBranch] = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  // Sync global keys with user‑specific keys (ensures AI Chat page gets the correct data)
+  const syncGlobalKeys = (y: string, b: string) => {
+    localStorage.setItem("studentYear", y);
+    localStorage.setItem("studentBranch", b);
+  };
+
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => {
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
       if (u) {
         const savedYear = localStorage.getItem(`year_${u.uid}`) || "";
         const savedBranch = localStorage.getItem(`branch_${u.uid}`) || "";
         setYear(savedYear);
         setBranch(savedBranch);
+        // Also sync the global keys for the AI Chat page
+        syncGlobalKeys(savedYear, savedBranch);
         onProfileUpdate(savedYear, savedBranch);
+      } else {
+        // No user: clear global keys to avoid showing stale data
+        syncGlobalKeys("", "");
+        onProfileUpdate("", "");
       }
     });
-    return () => unsub();
-  }, []);
+    return () => unsubscribe();
+  }, [onProfileUpdate]); // include onProfileUpdate in deps (safe because it's stable)
 
+  // Close dropdown when clicking outside
   useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
+    const handleClickOutside = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setDropdownOpen(false);
       }
     };
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   const handleLogin = async () => {
@@ -55,28 +85,25 @@ export default function AuthButton({ onProfileUpdate }: AuthButtonProps) {
     setDropdownOpen(false);
     setYear("");
     setBranch("");
+    // Clear both user‑specific and global keys
+    if (user) {
+      localStorage.removeItem(`year_${user.uid}`);
+      localStorage.removeItem(`branch_${user.uid}`);
+    }
+    syncGlobalKeys("", "");
     onProfileUpdate("", "");
   };
 
   const handleSaveProfile = () => {
+    // Save user‑specific preferences
     if (user) {
       localStorage.setItem(`year_${user.uid}`, year);
       localStorage.setItem(`branch_${user.uid}`, branch);
-      onProfileUpdate(year, branch);
-      setDropdownOpen(false);
     }
-  };
-
-  // Avatar: photo or first letter
-  const Avatar = () => {
-    const letter = user?.displayName?.[0]?.toUpperCase() || "?";
-    return user?.photoURL ? (
-      <img src={user.photoURL} alt="avatar" className="w-9 h-9 rounded-full object-cover" />
-    ) : (
-      <div className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-sm">
-        {letter}
-      </div>
-    );
+    // Sync global keys for the AI Chat page
+    syncGlobalKeys(year, branch);
+    onProfileUpdate(year, branch);
+    setDropdownOpen(false);
   };
 
   if (!user) {
@@ -96,17 +123,20 @@ export default function AuthButton({ onProfileUpdate }: AuthButtonProps) {
       <button
         onClick={() => setDropdownOpen(!dropdownOpen)}
         className="flex flex-col items-center gap-0.5 hover:opacity-80 transition"
+        aria-label="Open profile menu"
       >
-        <Avatar />
-        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Profile</span>
+        <Avatar user={user} />
+        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">
+          Profile
+        </span>
       </button>
 
-      {/* Dropdown — fixed to right edge */}
+      {/* Dropdown */}
       {dropdownOpen && (
         <div className="absolute right-0 mt-2 w-64 bg-white border border-slate-200 rounded-2xl shadow-2xl p-4 z-50">
           {/* User info */}
           <div className="flex items-center gap-3 mb-4 pb-3 border-b border-slate-100">
-            <Avatar />
+            <Avatar user={user} />
             <div className="overflow-hidden">
               <p className="text-sm font-bold text-slate-800 truncate">{user.displayName}</p>
               <p className="text-xs text-slate-400 truncate">{user.email}</p>

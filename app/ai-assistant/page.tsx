@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { Send, Bot, User, ChevronLeft, Sparkles, BookOpen, Clock, Award, GraduationCap } from 'lucide-react';
+import { Send, Bot, User, ChevronLeft, Sparkles, BookOpen, Clock, Award, GraduationCap, Paperclip, FileText, X } from 'lucide-react';
 import Link from 'next/link';
 
 const renderMarkdown = (text: string) => {
@@ -43,16 +43,35 @@ export default function AIChatPage() {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<{role: 'user' | 'ai', text: string}[]>([]);
   const [loading, setLoading] = useState(false);
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [studentYear, setStudentYear] = useState('');
+  const [studentBranch, setStudentBranch] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
 
+  // Load saved profile from localStorage (same as home page)
+  useEffect(() => {
+    const savedYear = localStorage.getItem('studentYear') || '';
+    const savedBranch = localStorage.getItem('studentBranch') || '';
+    setStudentYear(savedYear);
+    setStudentBranch(savedBranch);
+  }, []);
+
   const handleChat = async (overrideInput?: string) => {
     const userMsg = (overrideInput || input).trim();
-    if (!userMsg) return;
+    if (!userMsg && !pdfFile) return;
+
+    // PDF upload flow
+    if (pdfFile) {
+      await handlePdfUpload();
+      return;
+    }
+
     setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
     setInput("");
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
@@ -60,7 +79,7 @@ export default function AIChatPage() {
 
     try {
       const genAI = new GoogleGenerativeAI(process.env.NEXT_PUBLIC_GEMINI_API_KEY || "");
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // Using 1.5 or 2.5 Flash as preferred
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
       const expertPrompt = `You are an Academic Mentor for StudentHub. 
         Analyze the following opportunity details and provide a professional, helpful response. 
         Use clear headings and bullets.
@@ -75,11 +94,49 @@ export default function AIChatPage() {
     }
   };
 
+  const handlePdfUpload = async () => {
+    if (!pdfFile) return;
+    const fileName = pdfFile.name;
+
+    setMessages(prev => [...prev, {
+      role: 'user',
+      text: `📄 Uploaded: ${fileName}${studentYear && studentBranch ? `\n🎓 My Profile: Year ${studentYear} · ${studentBranch}` : ''}`
+    }]);
+    setPdfFile(null);
+    setLoading(true);
+
+    try {
+      const formData = new FormData();
+      formData.append('pdf', pdfFile);
+      if (studentYear) formData.append('year', studentYear);
+      if (studentBranch) formData.append('branch', studentBranch);
+
+      const res = await fetch('/api/pdf', { method: 'POST', body: formData });
+      const data = await res.json();
+
+      if (data.error) throw new Error(data.error);
+      setMessages(prev => [...prev, { role: 'ai', text: data.result }]);
+    } catch (err: any) {
+      setMessages(prev => [...prev, { role: 'ai', text: "Error processing PDF: " + err.message }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && file.type === 'application/pdf') {
+      setPdfFile(file);
+      setInput("");
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleChat(); }
   };
 
   const isEmpty = messages.length === 0;
+  const hasProfile = studentYear && studentBranch;
 
   return (
     <div className="flex flex-col h-screen bg-slate-50 font-sans">
@@ -92,7 +149,10 @@ export default function AIChatPage() {
         .suggestion-chip:hover { background: #f1f5f9; border-color: #6366f1; transform: translateY(-1px); }
         .send-btn { background: #4f46e5; transition: all 0.2s; }
         .send-btn:hover:not(:disabled) { transform: scale(1.05); }
-        .dot-pulse span { width:6px; height:6px; border-radius:50%; background:#6366f1; animation: dp 1.2s ease-in-out infinite; }
+        .send-btn:disabled { opacity: 0.4; }
+        .pdf-chip { background: #eef2ff; border: 1px solid #c7d2fe; }
+        .dot-pulse { display:flex; gap:4px; align-items:center; }
+        .dot-pulse span { width:6px; height:6px; border-radius:50%; background:#6366f1; animation: dp 1.2s ease-in-out infinite; display:block; }
         .dot-pulse span:nth-child(2) { animation-delay:0.2s; }
         .dot-pulse span:nth-child(3) { animation-delay:0.4s; }
         @keyframes dp { 0%,80%,100%{transform:scale(0.6);opacity:0.4} 40%{transform:scale(1);opacity:1} }
@@ -107,18 +167,25 @@ export default function AIChatPage() {
             <ChevronLeft size={18} className="text-slate-600" />
           </Link>
           <div className="flex items-center gap-3">
-            <div className="bg-blue-600 p-2 rounded-xl shadow-lg shadow-blue-100">
+            <div className="bg-indigo-600 p-2 rounded-xl shadow-lg shadow-indigo-100">
               <GraduationCap size={18} className="text-white" />
             </div>
             <div>
               <p className="text-slate-900 font-bold text-sm leading-tight">StudentHub AI</p>
-              <p className="text-[10px] text-slate-500 font-medium">Academic Mentor</p>
+              <p className="text-[10px] text-slate-500 font-medium">Academic Mentor · Gemini 2.5</p>
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-100">
-          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-          <span className="text-[10px] font-bold text-emerald-600 uppercase">Expert Active</span>
+        <div className="flex items-center gap-2">
+          {hasProfile && (
+            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-indigo-50 border border-indigo-100">
+              <span className="text-[10px] font-bold text-indigo-600">Year {studentYear} · {studentBranch}</span>
+            </div>
+          )}
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-100">
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-[10px] font-bold text-emerald-600 uppercase">Online</span>
+          </div>
         </div>
       </nav>
 
@@ -126,27 +193,36 @@ export default function AIChatPage() {
       <div className="flex-1 overflow-y-auto px-4 py-8">
         <div className="max-w-3xl mx-auto">
           {isEmpty && (
-            <div className="fade-in text-center mt-12 mb-10">
+            <div className="fade-in text-center mt-8 mb-10">
               <div className="w-20 h-20 bg-indigo-600 rounded-3xl mx-auto mb-6 flex items-center justify-center shadow-2xl shadow-indigo-200">
                 <Bot size={32} className="text-white" />
               </div>
-              <h2 className="text-slate-900 font-black text-3xl mb-3 tracking-tight">
-                Your Academic Mentor
-              </h2>
-              <p className="text-slate-500 text-sm mb-10 max-w-sm mx-auto leading-relaxed">
-                Paste requirements or ask about scholarships, internships, and hackathons. I'll analyze the details for you.
+              <h2 className="text-slate-900 font-black text-3xl mb-3 tracking-tight">Your Academic Mentor</h2>
+              <p className="text-slate-500 text-sm mb-3 max-w-sm mx-auto leading-relaxed">
+                Ask questions or <span className="text-indigo-600 font-semibold">upload a PDF</span> to instantly check your eligibility.
               </p>
+              {!hasProfile && (
+                <div className="inline-flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-700 text-xs font-medium px-4 py-2 rounded-full mb-8">
+                  💡 Set your profile on the home page for personalized eligibility checks
+                </div>
+              )}
+              {hasProfile && (
+                <div className="inline-flex items-center gap-2 bg-indigo-50 border border-indigo-100 text-indigo-700 text-xs font-medium px-4 py-2 rounded-full mb-8">
+                  🎓 Checking eligibility for Year {studentYear} · {studentBranch}
+                </div>
+              )}
               <div className="grid grid-cols-1 gap-3 text-left">
                 {suggestions.map((s, i) => (
-                  <button
-                    key={i}
-                    onClick={() => handleChat(s.text)}
-                    className="suggestion-chip rounded-2xl px-5 py-4 flex items-center gap-4 shadow-sm"
-                  >
+                  <button key={i} onClick={() => handleChat(s.text)} className="suggestion-chip rounded-2xl px-5 py-4 flex items-center gap-4 shadow-sm">
                     <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600">{s.icon}</div>
                     <span className="text-sm font-medium text-slate-600">{s.text}</span>
                   </button>
                 ))}
+                {/* PDF suggestion */}
+                <button onClick={() => fileInputRef.current?.click()} className="suggestion-chip rounded-2xl px-5 py-4 flex items-center gap-4 shadow-sm border-dashed">
+                  <div className="p-2 bg-rose-50 rounded-lg text-rose-500"><FileText size={14} /></div>
+                  <span className="text-sm font-medium text-slate-600">Upload a scholarship/internship PDF to check eligibility</span>
+                </button>
               </div>
             </div>
           )}
@@ -155,22 +231,22 @@ export default function AIChatPage() {
             {messages.map((m, i) => (
               <div key={i} className={`fade-in flex gap-4 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 {m.role === 'ai' && (
-                  <div className="w-9 h-9 rounded-xl shrink-0 flex items-center justify-center bg-indigo-600 shadow-md">
+                  <div className="w-9 h-9 rounded-xl shrink-0 flex items-center justify-center bg-indigo-600 shadow-md mt-1">
                     <Bot size={16} className="text-white" />
                   </div>
                 )}
                 <div className={`max-w-[85%] px-5 py-4 rounded-3xl text-sm ${
-                  m.role === 'user' 
-                  ? 'user-bubble text-white rounded-tr-none shadow-lg shadow-indigo-100' 
-                  : 'ai-bubble text-slate-700 rounded-tl-none'
+                  m.role === 'user'
+                    ? 'user-bubble text-white rounded-tr-none shadow-lg shadow-indigo-100'
+                    : 'ai-bubble text-slate-700 rounded-tl-none'
                 }`}>
                   {m.role === 'ai'
                     ? <div className="prose prose-slate max-w-none">{renderMarkdown(m.text)}</div>
-                    : <p className="leading-relaxed font-medium">{m.text}</p>
+                    : <p className="leading-relaxed font-medium whitespace-pre-wrap">{m.text}</p>
                   }
                 </div>
                 {m.role === 'user' && (
-                  <div className="w-9 h-9 rounded-xl shrink-0 flex items-center justify-center bg-white border border-slate-200 shadow-sm">
+                  <div className="w-9 h-9 rounded-xl shrink-0 flex items-center justify-center bg-white border border-slate-200 shadow-sm mt-1">
                     <User size={16} className="text-slate-400" />
                   </div>
                 )}
@@ -193,15 +269,46 @@ export default function AIChatPage() {
       </div>
 
       {/* Input */}
-      <div className="bg-white border-t border-slate-100 px-4 pb-8 pt-4">
+      <div className="bg-white border-t border-slate-100 px-4 pb-6 pt-4">
         <div className="max-w-3xl mx-auto">
-          <div className="input-box rounded-2xl flex items-end gap-2 p-2 pl-5 bg-white">
+
+          {/* PDF preview chip */}
+          {pdfFile && (
+            <div className="pdf-chip flex items-center gap-2 px-4 py-2.5 rounded-xl mb-2 w-fit">
+              <FileText size={14} className="text-indigo-600" />
+              <span className="text-xs font-semibold text-indigo-700 max-w-[200px] truncate">{pdfFile.name}</span>
+              <button onClick={() => setPdfFile(null)} className="text-indigo-400 hover:text-indigo-600 ml-1">
+                <X size={14} />
+              </button>
+            </div>
+          )}
+
+          <div className="input-box rounded-2xl flex items-end gap-2 p-2 pl-4">
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/pdf"
+              className="hidden"
+              onChange={handleFileChange}
+            />
+
+            {/* Paperclip button */}
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="p-2 rounded-xl hover:bg-slate-100 transition shrink-0 mb-1"
+              title="Upload PDF"
+            >
+              <Paperclip size={18} className="text-slate-400 hover:text-indigo-600 transition" />
+            </button>
+
             <textarea
               ref={textareaRef}
               className="flex-1 bg-transparent outline-none text-slate-800 text-sm resize-none py-3"
               style={{ minHeight: '44px', maxHeight: '150px' }}
-              placeholder="Paste a scholarship description here..."
+              placeholder={pdfFile ? "PDF ready — click send to analyze..." : "Ask a question or upload a PDF 📎"}
               value={input}
+              disabled={!!pdfFile}
               rows={1}
               onChange={(e) => {
                 setInput(e.target.value);
@@ -212,14 +319,14 @@ export default function AIChatPage() {
             />
             <button
               onClick={() => handleChat()}
-              disabled={loading || !input.trim()}
+              disabled={loading || (!input.trim() && !pdfFile)}
               className="send-btn w-12 h-12 rounded-xl shrink-0 flex items-center justify-center text-white"
             >
               <Send size={18} />
             </button>
           </div>
-          <p className="text-center text-[10px] mt-3 text-slate-400 font-medium">
-            AI can make mistakes. Verify critical deadlines with your SPOC.
+          <p className="text-center text-[10px] mt-2 text-slate-400 font-medium">
+            Upload PDF 📎 for instant eligibility check · Enter to send
           </p>
         </div>
       </div>
