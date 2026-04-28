@@ -1,36 +1,28 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# StudentHub
+![Status](https://img.shields.io/badge/Status-Technical_Freeze-orange)
 
-## Getting Started
 
-First, run the development server:
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## Project Overview
+StudentHub solves one painful problem: **students in tier-2/3 colleges miss out on scholarships, internships, and hackathons** because information is scattered across slow, unverified portals and buried inside lengthy PDFs. 
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The platform centralizes verified opportunities, uses AI to filter them by a student’s profile, and lets anyone upload a PDF to instantly check eligibility all secured through Google Firebase.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-## Learn More
+## Technical Status & Blocker
+During final integration, the project encountered a model migration issue (Gemini v1beta → stable), resulting in `404` errors on the PDF-parsing endpoint. 
 
-To learn more about Next.js, take a look at the following resources:
+Instead of shipping a fragile pipeline, I have decided to **freeze the prototype** at this stage. This allows for a proper refactor of the AI tier later—ensuring a stable model with professional-grade fallbacks and error handling.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Development & Methodology
+This repository represents a **Rapid Prototyping Phase** where the codebase was generated and iterated using generative AI as the primary development engine. My role involved directing the architecture, managing the logic flow between AI and the IDE, and performing high-level debugging to align the output with the project vision.
 
-## Deploy on Vercel
+### Future Roadmap: Custom Implementation
+This prototype serves as the "Proof of Concept." To ensure deep technical mastery and complete control over the system's performance, the next iteration of StudentHub will be a **Custom Implementation**. 
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+I am moving toward a new repository where the **Own Contribution** of logic, manual code authorship, and architecture will be built from scratch. This transition marks the shift from AI-driven discovery to a self-authored, production-ready solution.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+*Developed by Sangapu Hasini· Built for the Google Solution Challenge 2026*
