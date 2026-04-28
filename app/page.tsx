@@ -16,11 +16,11 @@ import {
 import AuthButton from '@/components/AuthButton';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-// Initialize Gemini AI (use your API key from env)
-const genAI = new GoogleGenerativeAI(process.env.NEXT_PUBLIC_GEMINI_API_KEY || '');
-const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
-// Helper functions (unchanged, but kept as they work)
+const genAI = new GoogleGenerativeAI(process.env.NEXT_PUBLIC_GEMINI_API_KEY || '');
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+
 const getDeadlineStatus = (dateStr: string) => {
   if (!dateStr) return null;
   if (
@@ -140,10 +140,10 @@ Example: ["id1", "id2", "id3"]`;
         setAiFiltering(false);
       }
     },
-    [opportunities] // re‑create when opportunities change
+    [opportunities] 
   );
 
-  // Compute final filtered list based on type filter, search term, and AI filter
+ 
   const filteredData = opportunities.filter((opt) => {
     const matchesFilter = filter === 'All' || opt.type === filter;
     const matchesSearch = opt.title.toLowerCase().includes(searchTerm.toLowerCase());

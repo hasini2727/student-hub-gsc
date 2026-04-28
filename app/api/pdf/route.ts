@@ -14,8 +14,8 @@ export async function POST(req: Request) {
     const bytes = await file.arrayBuffer();
     const base64 = Buffer.from(bytes).toString('base64');
 
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const genAI = new GoogleGenerativeAI(process.env.NEXT_PUBLIC_GEMINI_API_KEY || '');
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const hasProfile = year && branch;
 
@@ -59,7 +59,6 @@ export async function POST(req: Request) {
 
          **💡 Tip**
          - Who would benefit most from this opportunity?`;
-
     const result = await model.generateContent({
       contents: [{
         role: 'user',
